@@ -66,7 +66,7 @@ class RadarTests(unittest.TestCase):
             {'model': 'vendor/model:free', 'choices': [{'finish_reason': 'stop', 'message': {'content': text}}], 'usage': {'cost': 0}}
         ]
         with patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test-key'}), patch('radar.get_json', side_effect=responses) as call, patch('radar.save_state'):
-            radar.generate('ai', [{'url': 'https://example.com/a'}], {'model': 'openrouter/free'}, state, now)
+            radar.generate('github', [{'url': 'https://example.com/a'}], {'model': 'openrouter/free'}, state, now)
             payload = call.call_args_list[2].args[1]
             self.assertEqual(payload['provider']['max_price'], {'prompt': 0, 'completion': 0})
             self.assertNotIn('plugins', payload)
@@ -82,6 +82,17 @@ class RadarTests(unittest.TestCase):
         for text in ['材料 [S02]', '材料 https://example.com/invented', '没有引用']:
             with self.assertRaises(radar.RequestError):
                 radar.expand_citations(text, items)
+
+    def test_news_facts_come_from_sources_and_new_numbers_are_rejected(self):
+        import json
+        source = {'title': '来源标题', 'summary': '来源的原始摘要', 'source': '测试来源',
+                  'published_at': '2026-10-14', 'url': 'https://example.com/a'}
+        analysis = '如果这项进展得到独立验证，可能影响个人学习和研究的工作流程，实际适用条件仍需要查看原始材料。'
+        text = radar.render_news(json.dumps({'items': [{'source_id': 'S01', 'analysis': analysis}]}), [source])
+        self.assertIn('> 来源的原始摘要', text)
+        self.assertIn('AI 分析推测', text)
+        with self.assertRaises(radar.RequestError):
+            radar.render_news(json.dumps({'items': [{'source_id': 'S01', 'analysis': analysis + '需要16GB内存。'}]}), [source])
 
 
 if __name__ == '__main__':

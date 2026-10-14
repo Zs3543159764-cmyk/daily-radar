@@ -284,6 +284,39 @@ def expand_citations(text, items):
     return re.sub(r'\[S(\d{2,3})\]', lambda m: '[来源%s](%s)' % (int(m[1]), items[int(m[1]) - 1]['url']), text)
 
 
+def render_news(text, items):
+    """Facts are rendered from source data, never from model-authored paraphrases."""
+    try:
+        data = json.loads(text.strip().removeprefix('```json').removesuffix('```').strip())
+    except (ValueError, AttributeError):
+        raise RequestError('模型未返回有效的结构化新闻分析') from None
+    rows = data.get('items', [])
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 8:
+        raise RequestError('新闻选择数量不合法')
+    lines = ['输入为 RSS 标题／摘要，未做全文核验。下面的「来源材料」由程序直接引用；AI 仅负责筛选和分析推测，不据此确认产品参数、行情或事件细节。', '']
+    seen = set()
+    for row in rows:
+        sid = row.get('source_id', '')
+        if not re.fullmatch(r'S\d{2,3}', sid) or not 1 <= int(sid[1:]) <= len(items) or sid in seen:
+            raise RequestError('结构化分析包含无效或重复来源')
+        seen.add(sid)
+        item = items[int(sid[1:]) - 1]
+        analysis = row.get('analysis', '')
+        if not isinstance(analysis, str) or not 30 <= len(analysis) <= 700 or re.search(r'https?://', analysis):
+            raise RequestError('结构化分析长度或链接不合法')
+        # New precise numeric claims (hardware sizes, prices, dates...) require source evidence.
+        source_numbers = set(re.findall(r'\d+(?:\.\d+)?', item['title'] + ' ' + item['summary']))
+        if not set(re.findall(r'\d+(?:\.\d+)?', analysis)).issubset(source_numbers):
+            raise RequestError('分析包含来源未支持的数值')
+        lines += ['## ' + item['title'], '', '来源：' + item['source'] + '｜' + item['published_at'],
+                  '[查看原始来源](' + item['url'] + ')', '', '**来源材料（非全文核验）：**',
+                  '> ' + item['summary'] if item['summary'] else '> 只有标题，没有正文摘要。', '',
+                  '**AI 分析推测：** ' + analysis, '',
+                  '**仍需核实：** 原文细节、独立佐证及对个人的实际适用条件；不能从本条摘要直接确认。', '']
+    lines += ['## 后续跟踪', '', '优先查看上面的原始来源及后续官方更新；在获取全文或独立证据前，不把分析推测当成已确认事实。']
+    return '\n'.join(lines)
+
+
 def generate(topic_id, items, config, state, now):
     if state.get('billing_halt'):
         raise RequestError('此前服务返回非零费用；模型调用已锁定，需人工排查')
@@ -309,7 +342,7 @@ def generate(topic_id, items, config, state, now):
     system = (ROOT / 'common.md').read_text() + '\n' + (ROOT / (topic_id + '.md')).read_text()
     system += '\n引用格式覆盖：每条材料有 source_id。只用 [S01] 这样的来源编号引用，禁止输出 URL，程序会补全真实链接。'
     if topic_id != 'github':
-        system += '\n报告正文控制在 1800—2500 个汉字以内，重要事件优先，保证最后一节完整结束。直接输出报告，不输出思考过程。'
+        system += '\n最终格式覆盖：只输出 JSON 对象，不输出 Markdown 报告。结构为 {"items":[{"source_id":"S01","analysis":"150—300字简体中文的意义分析和应观察的变量"}]}。选择最多8项最相关信息。不要另写事实概述、链接、参数、硬件要求、使用建议或购买建议。analysis 必须以条件或推测口吻解释，不得引入来源没有的细节和数字。来源材料本身将由程序逐字展示。不输出思考过程。'
     material_items = [{**{k: v for k, v in item.items() if k != 'url'}, 'source_id': 'S%02d' % n}
                       for n, item in enumerate(items, 1)]
     material = json.dumps(material_items, ensure_ascii=False)
@@ -321,6 +354,8 @@ def generate(topic_id, items, config, state, now):
         'max_tokens': 18000 if topic_id == 'github' else 10000,
         'reasoning': {'enabled': False},
         'provider': {'max_price': {'prompt': 0, 'completion': 0}}}
+    if topic_id != 'github':
+        payload['response_format'] = {'type': 'json_object'}
     # No tools, plugins, web search, paid fallback models, or auto router.
     last = None
     for attempt in range(2):
@@ -338,7 +373,9 @@ def generate(topic_id, items, config, state, now):
             choice = response['choices'][0]
             if choice.get('finish_reason') != 'stop':
                 raise RequestError('模型未完整结束，状态：%s' % choice.get('finish_reason'))
-            text = validate_report(expand_citations(choice['message']['content'], items), items)
+            content = choice['message']['content']
+            text = (validate_report(expand_citations(content, items), items) if topic_id == 'github'
+                    else render_news(content, items))
             return text, {'model': response.get('model', model_id), 'usage': response.get('usage', {})}
         except (RequestError, KeyError, IndexError, TypeError, InvalidOperation) as e:
             last = e
@@ -520,6 +557,9 @@ def main():
                                                        'items': items, 'model': meta}, ensure_ascii=False, indent=2))
         save_state(state)
         if args.send:
+            if status != 'ai_generated' and not args.scheduled:
+                print(topic_id + ': 手动测试未生成合格 AI 正文，未发送微信', file=sys.stderr)
+                continue
             try:
                 delivery = push_report('[日报]' + topic['title'] + ' ' + str(local.date()), content, state, topic_id, str(local.date()))
                 state.setdefault('completed', {})[report_key] = {'at': now.isoformat(), 'generation': status, 'delivery': delivery}
