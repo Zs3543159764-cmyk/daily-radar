@@ -1,0 +1,113 @@
+name: Five daily radars (free only)
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+    - cron: '0 4 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 11 * * *'
+    - cron: '30 14 * * *'
+  workflow_dispatch:
+    inputs:
+      topic:
+        type: choice
+        options: [ai, eastasia, geopolitics, finance, github, all]
+        default: ai
+        description: Report to test
+      mode:
+        type: choice
+        options: [collect-only, generate-preview, send]
+        default: collect-only
+        description: Preview first; send explicitly transmits to WeChat
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-radar-state
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event_name == 'workflow_dispatch' || vars.RADAR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: '1'
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+      PUSHPLUS_SECRET_KEY: ${{ secrets.PUSHPLUS_SECRET_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      EVENT_NAME: ${{ github.event_name }}
+      SCHEDULE: ${{ github.event.schedule }}
+      INPUT_TOPIC: ${{ inputs.topic }}
+      INPUT_MODE: ${{ inputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate and test (offline)
+        run: |
+          python radar.py --validate
+          python -m unittest test_radar -v
+      - name: Restore public-data state
+        run: |
+          mkdir -p state
+          if git ls-remote --exit-code --heads origin radar-state >/dev/null 2>&1; then
+            git fetch origin radar-state
+            git show FETCH_HEAD:runtime.json > state/runtime.json
+          fi
+      - name: Collect, generate or push
+        id: run
+        run: |
+          if [ "$EVENT_NAME" = schedule ]; then
+            case "$SCHEDULE" in
+              '30 2 * * *') SLOT=10:30 ;;
+              '0 4 * * *') SLOT=12:00 ;;
+              '30 8 * * *') SLOT=16:30 ;;
+              '30 11 * * *') SLOT=19:30 ;;
+              '30 14 * * *') SLOT=22:30 ;;
+              *) exit 1 ;;
+            esac
+            python radar.py --scheduled --slot "$SLOT" --send
+          else
+            case "$INPUT_MODE" in
+              collect-only) python radar.py --topic "$INPUT_TOPIC" --collect-only ;;
+              generate-preview) python radar.py --topic "$INPUT_TOPIC" ;;
+              send) python radar.py --topic "$INPUT_TOPIC" --send ;;
+              *) exit 1 ;;
+            esac
+          fi
+      - name: Persist state even after partial failure
+        if: always() && steps.run.outcome != 'skipped'
+        run: |
+          if [ ! -f state/runtime.json ]; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git worktree add --detach "$RUNNER_TEMP/radar-state" HEAD
+          cd "$RUNNER_TEMP/radar-state"
+          if git ls-remote --exit-code --heads origin radar-state >/dev/null 2>&1; then
+            git fetch origin radar-state
+            git checkout -B radar-state FETCH_HEAD
+          else
+            git checkout --orphan radar-state
+            git rm -rf .
+          fi
+          cp "$GITHUB_WORKSPACE/state/runtime.json" runtime.json
+          git add runtime.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update radar snapshots and execution state'
+            git push origin HEAD:radar-state
+          fi
+      - name: Preview in run summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write('## 日报执行结果\n\n日志中的「已受理」不代表微信最终送达。\n\n')
+              for report in sorted(Path('reports').glob('*.md')):
+                  out.write(report.read_text()[:45000] + '\n\n')
+          PY
