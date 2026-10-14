@@ -342,7 +342,7 @@ def generate(topic_id, items, config, state, now):
     system = (ROOT / 'common.md').read_text() + '\n' + (ROOT / (topic_id + '.md')).read_text()
     system += '\n引用格式覆盖：每条材料有 source_id。只用 [S01] 这样的来源编号引用，禁止输出 URL，程序会补全真实链接。'
     if topic_id != 'github':
-        system += '\n最终格式覆盖：只输出 JSON 对象，不输出 Markdown 报告。结构为 {"items":[{"source_id":"S01","analysis":"150—300字简体中文的意义分析和应观察的变量"}]}。选择最多8项最相关信息。不要另写事实概述、链接、参数、硬件要求、使用建议或购买建议。analysis 必须以条件或推测口吻解释，不得引入来源没有的细节和数字。来源材料本身将由程序逐字展示。不输出思考过程。'
+        system += '\n最终格式覆盖：只输出 JSON 对象，不输出 Markdown 报告。结构为 {"items":[{"source_id":"S01","analysis":"150—300字简体中文的意义分析和应观察的变量"}]}。选择最多8项最相关信息。不要另写事实概述、链接、参数、硬件要求、使用建议或购买建议。analysis 必须以条件或推测口吻解释，不得引入来源没有的细节和数字。analysis 中不要写阿拉伯数字；原始数字将由程序展示。来源材料本身将由程序逐字展示。不输出思考过程。'
     material_items = [{**{k: v for k, v in item.items() if k != 'url'}, 'source_id': 'S%02d' % n}
                       for n, item in enumerate(items, 1)]
     material = json.dumps(material_items, ensure_ascii=False)
@@ -379,9 +379,13 @@ def generate(topic_id, items, config, state, now):
             return text, {'model': response.get('model', model_id), 'usage': response.get('usage', {})}
         except (RequestError, KeyError, IndexError, TypeError, InvalidOperation) as e:
             last = e
+            print('免费模型尝试 %s 未通过：%s' % (attempt + 1, str(e) if isinstance(e, RequestError) else type(e).__name__))
             if state.get('billing_halt'):
                 break
             if attempt == 0:
+                payload['messages'].append({'role': 'user', 'content': '上一轮未通过程序检查：' +
+                    (str(e) if isinstance(e, RequestError) else '输出结构无效') +
+                    '。重新输出完整的指定格式。不要补充原文没有的事实或数值；若是新闻，analysis 不要出现阿拉伯数字。'})
                 time.sleep(8)
     raise RequestError(str(last) if isinstance(last, RequestError) else '免费模型调用失败')
 
