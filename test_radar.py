@@ -59,7 +59,7 @@ class RadarTests(unittest.TestCase):
 
     def test_free_only_request_has_no_plugins_or_tools(self):
         state, now = {}, datetime(2026, 10, 14, tzinfo=timezone.utc)
-        text = '来源材料说明。' * 100 + '[来源](https://example.com/a)'
+        text = '来源材料说明。' * 100 + '[S01]'
         responses = [
             {'data': [{'id': 'openrouter/free', 'pricing': {'prompt': '0', 'completion': '0'}}]},
             {'data': {'free_model_daily_requests': {'remaining': 2}}},
@@ -72,7 +72,16 @@ class RadarTests(unittest.TestCase):
             self.assertNotIn('plugins', payload)
             self.assertNotIn('tools', payload)
             self.assertNotIn('models', payload)
+            self.assertEqual(payload['reasoning'], {'enabled': False})
             self.assertEqual(state['model_requests']['2026-10-14'], 1)
+
+    def test_source_ids_restore_exact_urls_and_reject_unknown_sources(self):
+        items = [{'url': 'https://example.com/very-long?query=original'}]
+        self.assertEqual(radar.expand_citations('材料 [S01]', items),
+                         '材料 [来源1](https://example.com/very-long?query=original)')
+        for text in ['材料 [S02]', '材料 https://example.com/invented', '没有引用']:
+            with self.assertRaises(radar.RequestError):
+                radar.expand_citations(text, items)
 
 
 if __name__ == '__main__':
