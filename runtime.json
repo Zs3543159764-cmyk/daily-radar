@@ -94,6 +94,19 @@
     }
   ],
   "model_requests": {
-    "2026-10-14": 3
+    "2026-10-14": 5
+  },
+  "push_receipts": {
+    "2026-10-14:ai:1": {
+      "status": "accepted",
+      "sha256": "a9c39729d5be23def4330ef852e1bcc6062cfed01fcb8f8746f665a05245ff86"
+    }
+  },
+  "completed": {
+    "2026-10-14:ai": {
+      "at": "2026-10-14T09:31:07.010919+00:00",
+      "generation": "ai_generated",
+      "delivery": "accepted_unverified"
+    }
   }
 }
