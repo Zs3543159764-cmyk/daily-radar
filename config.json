@@ -1,6 +1,6 @@
 {
   "timezone": "Asia/Shanghai",
-  "model": "google/gemma-4-26b-a4b-it:free",
+  "model": "openrouter/free",
   "topics": {
     "ai": {
       "title": "AI／科技／大模型每日雷达",
