@@ -1,0 +1,30 @@
+{
+  "timezone": "Asia/Shanghai",
+  "model": "openrouter/free",
+  "topics": {
+    "ai": {"title": "AI／科技／大模型每日雷达", "time": "10:30", "max_age_hours": 48, "feeds": [
+      {"name": "OpenAI 官方", "url": "https://openai.com/news/rss.xml"},
+      {"name": "Google AI 官方", "url": "https://blog.google/technology/ai/rss/"},
+      {"name": "Hugging Face 官方", "url": "https://huggingface.co/blog/feed.xml"},
+      {"name": "AI 新闻检索", "query": "(AI agent OR 大模型 OR 人工智能) when:2d", "lang": "zh-CN", "country": "CN"}
+    ]},
+    "eastasia": {"title": "东亚文化／书法／艺术设计每日雷达", "time": "12:00", "max_age_hours": 168, "feeds": [
+      {"name": "NHK 社会", "url": "https://www3.nhk.or.jp/rss/news/cat2.xml"},
+      {"name": "书法展览与研究", "query": "(书法 OR 書法) (展览 OR 展覽 OR 征稿 OR 研究生) when:7d", "lang": "zh-CN", "country": "CN"},
+      {"name": "日本书道与博物馆", "query": "(書道 OR 書跡 OR 中国書画) (展覧会 OR 博物館 OR 大学) when:7d", "lang": "ja", "country": "JP"},
+      {"name": "韩国艺术与书艺", "query": "(서예 OR 미술관) (전시 OR 대학) when:7d", "lang": "ko", "country": "KR"}
+    ]},
+    "geopolitics": {"title": "全球地缘政治每日深度雷达", "time": "16:30", "max_age_hours": 48, "feeds": [
+      {"name": "BBC 世界", "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
+      {"name": "NHK 国际", "url": "https://www3.nhk.or.jp/rss/news/cat6.xml"},
+      {"name": "联合国新闻", "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml"},
+      {"name": "国际局势检索", "query": "(地缘政治 OR 国际局势 OR 外交) when:2d", "lang": "zh-CN", "country": "CN"}
+    ]},
+    "finance": {"title": "商业金融市场每日雷达", "time": "19:30", "max_age_hours": 48, "feeds": [
+      {"name": "BBC 商业", "url": "https://feeds.bbci.co.uk/news/business/rss.xml"},
+      {"name": "日本经济新闻 NHK", "url": "https://www3.nhk.or.jp/rss/news/cat5.xml"},
+      {"name": "金融市场检索", "query": "(金融市场 OR 央行 OR 利率 OR 商业) when:2d", "lang": "zh-CN", "country": "CN"}
+    ]},
+    "github": {"title": "GitHub 每日热门项目雷达", "time": "22:30", "max_age_hours": 24, "feeds": []}
+  }
+}

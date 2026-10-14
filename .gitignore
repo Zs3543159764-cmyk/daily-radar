@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+reports/*
+!reports/.gitkeep
+state/*
+!state/.gitkeep
+
