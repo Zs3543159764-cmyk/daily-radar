@@ -92,5 +92,8 @@
         "storytold/lightcraft": 12203
       }
     }
-  ]
+  ],
+  "model_requests": {
+    "2026-10-14": 2
+  }
 }
